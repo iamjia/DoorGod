@@ -1,6 +1,6 @@
 //
 //  DoorGod.m
-//  
+//
 //
 //  Created by jia on 15/9/22.
 //
@@ -20,6 +20,10 @@
 @end
 
 @implementation DoorGod
+{
+@private
+    CLLocationManager  *_locMgr;
+}
 
 + (DoorGod *)sharedInstance
 {
@@ -32,10 +36,22 @@
     return s_instance;
 }
 
+- (void)requestLocationCompletion:(DGBlock)completionHandler
+{
+    if (nil == _locMgr) {
+        //由于IOS8中定位的授权机制改变 需要进行手动授权
+        _locMgr = [[CLLocationManager alloc] init];
+        [_locMgr requestWhenInUseAuthorization];
+        _locMgr.delegate = self;
+        self.completionHandler = completionHandler;
+        [_locMgr startUpdatingLocation];
+    }
+}
+
 + (void)requestAccessOfPrivacy:(DGPrivacy)privacy completion:(DGBlock)completionHandler
 {
     [self requestAccessOfPrivacy:privacy beforeRun:nil completion:completionHandler];
-
+    
 }
 + (void)requestAccessOfPrivacy:(DGPrivacy)privacy beforeRun:(BOOL (^)(void))beforeRun completion:(DGBlock)completionHandler
 {
@@ -165,7 +181,7 @@
             break;
         }
         case kABAuthorizationStatusNotDetermined: {
-
+            
             CFErrorRef cError = NULL;
             ABAddressBookRef addressBook = ABAddressBookCreateWithOptions(NULL, &cError);
             NSError *nError = (__bridge_transfer NSError *)(cError);
@@ -214,16 +230,7 @@
             break;
         }
         case kCLAuthorizationStatusNotDetermined: {
-            
-            //由于IOS8中定位的授权机制改变 需要进行手动授权
-            CLLocationManager  *locationManager = [[CLLocationManager alloc] init];
-            //获取授权认证
-            [locationManager requestAlwaysAuthorization];
-            [locationManager requestWhenInUseAuthorization];
-            locationManager.delegate = self.sharedInstance;
-            self.sharedInstance.completionHandler = completionHandler;
-            [locationManager startUpdatingLocation];
-            
+            [self.sharedInstance requestLocationCompletion:completionHandler];
             break;
         }
             
@@ -241,11 +248,15 @@
 
 - (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray<CLLocation *> *)locations
 {
-    [manager startUpdatingLocation];
+    [manager stopUpdatingLocation];
 }
 
 - (void)locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status
 {
+    if (status == kCLAuthorizationStatusNotDetermined) {
+        return;
+    }
+    
     if (nil != _completionHandler) {
         _completionHandler(status == kCLAuthorizationStatusAuthorizedAlways || status == kCLAuthorizationStatusAuthorizedWhenInUse , nil);
     }
